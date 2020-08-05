@@ -35,6 +35,16 @@ from ..utils.gpu import setup_gpu
 from ..utils.keras_version import check_keras_version
 from ..utils.tf_version import check_tf_version
 
+import tensorflow as tf
+
+# this fixes "Could not create cudnn handle: CUDNN_STATUS_INTERNAL_ERROR"
+physical_devices = tf.config.experimental.list_physical_devices('GPU')
+assert len(physical_devices) > 0, "Not enough GPU hardware devices available"
+tf_config = tf.config.experimental.set_memory_growth(physical_devices[0], True)
+
+# this fixes "failed to allocate 3.05G (3276114944 bytes) from device: CUDA_ERROR_OUT_OF_MEMORY: out of memory"
+gpu_options = tf.compat.v1.GPUOptions(per_process_gpu_memory_fraction=0.66)
+sess = tf.compat.v1.Session(config=tf.compat.v1.ConfigProto(gpu_options=gpu_options))
 
 def create_generator(args, preprocess_image):
     """ Create generators for evaluation.

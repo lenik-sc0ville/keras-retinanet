@@ -25,6 +25,15 @@ import keras
 import keras.preprocessing.image
 import tensorflow as tf
 
+# this fixes "Could not create cudnn handle: CUDNN_STATUS_INTERNAL_ERROR"
+physical_devices = tf.config.experimental.list_physical_devices('GPU')
+assert len(physical_devices) > 0, "Not enough GPU hardware devices available"
+config = tf.config.experimental.set_memory_growth(physical_devices[0], True)
+
+# this fixes "failed to allocate 3.05G (3276114944 bytes) from device: CUDA_ERROR_OUT_OF_MEMORY: out of memory"
+gpu_options = tf.compat.v1.GPUOptions(per_process_gpu_memory_fraction=0.66)
+sess = tf.compat.v1.Session(config=tf.compat.v1.ConfigProto(gpu_options=gpu_options))
+
 # Allow relative imports when being executed as script.
 if __name__ == "__main__" and __package__ is None:
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
