@@ -112,6 +112,7 @@ def parse_args(args):
 	csv_parser.add_argument('classes', help='Path to a CSV file containing class label mapping.')
 
 	parser.add_argument('model',			  help='Path to RetinaNet model.')
+	parser.add_argument('video',			  help='Path to video to process.')
 	parser.add_argument('--convert-model',	help='Convert the model to an inference model (ie. the input is a training model).', action='store_true')
 	parser.add_argument('--backbone',		 help='The backbone of the model.', default='resnet50')
 	parser.add_argument('--gpu',			  help='Id of the GPU to use (as reported by nvidia-smi).', type=int)
@@ -213,7 +214,7 @@ def main(args=None):
 
 
 	# define a video capture object
-	vid = cv2.VideoCapture(0)
+	vid = cv2.VideoCapture(args.video) if args.video else cv2.VideoCapture(0)
 
 	counter = 0
 	start = time.time()
@@ -221,6 +222,9 @@ def main(args=None):
 
 		# Capture the video frame by frame
 		ret, frame = vid.read()
+		if not ret :
+			print
+			break
 
 		infer_time = 0
 		frame, infer_time = process_frame(frame, generator, model)
