@@ -122,6 +122,7 @@ def parse_args(args):
 	parser.add_argument('--save-path',		help='Path for saving images with detections (doesn\'t work for COCO).')
 	parser.add_argument('--image-min-side',   help='Rescale the image so the smallest side is min_side.', type=int, default=800)
 	parser.add_argument('--image-max-side',   help='Rescale the image if the largest side is larger than max_side.', type=int, default=1333)
+	parser.add_argument('--batch-size',       help='Size of the batches.', default=1, type=int)
 	parser.add_argument('--no-resize',		help='Don''t rescale the image.', action='store_true')
 	parser.add_argument('--config',		   help='Path to a configuration parameters .ini file (only used with --convert-model).')
 
@@ -172,6 +173,59 @@ def process_frame( frame, generator, model ) :
 
 	return raw_image, inference_time
 
+def process_frames( frames, generator, model ) :
+	images = []
+	for frame in frames :
+		raw_image	= frame
+		image		= generator.preprocess_image(raw_image.copy())
+		image, scale = generator.resize_image(image)
+
+		if keras.backend.image_data_format() == 'channels_first':
+			image = image.transpose((2, 0, 1))
+
+		images.append(image)
+		print scale,
+
+	score_threshold = 0.5	# was 0.05
+	max_detections = 100
+
+	# run network
+	start = time.time()
+#	boxes, scores, labels = model.predict_on_batch(np.expand_dims(image, axis=0))[:3]
+	boxes, scores, labels = model.predict_on_batch(np.array(images))[:3]
+	inference_time = time.time() - start
+
+	'''
+	#print boxes, scores
+
+	# correct boxes for image scale
+	boxes /= scale
+
+	# select indices which have a score above the threshold
+	indices = np.where(scores[0, :] > score_threshold)[0]
+
+	# select those scores
+	scores = scores[0][indices]
+
+	# find the order with which to sort the scores
+	scores_sort = np.argsort(-scores)[:max_detections]
+
+	# select detections
+	image_boxes		= boxes[0, indices[scores_sort], :]
+	image_scores	= scores[scores_sort]
+	image_labels	= labels[0, indices[scores_sort]]
+	#image_labels	= [0] * len(scores_sort)
+
+	#image_detections = np.concatenate([image_boxes, np.expand_dims(image_scores, axis=1), np.expand_dims(image_labels, axis=1)], axis=1)
+
+	#draw_annotations(raw_image, generator.load_annotations(i), label_to_name=generator.label_to_name)
+
+	draw_detections(raw_image, image_boxes, image_scores, image_labels, label_to_name=generator.label_to_name, score_threshold=score_threshold)
+	'''
+
+	return inference_time
+
+
 def main(args=None):
 	# parse arguments
 	if args is None:
@@ -211,8 +265,6 @@ def main(args=None):
 	if args.convert_model:
 		model = models.convert_model(model, anchor_params=anchor_params, pyramid_levels=pyramid_levels)
 
-
-
 	# define a video capture object
 	vid = cv2.VideoCapture(args.video) if args.video else cv2.VideoCapture(0)
 
@@ -220,25 +272,38 @@ def main(args=None):
 	start = time.time()
 	while(True):
 
-		# Capture the video frame by frame
-		ret, frame = vid.read()
-		if not ret :
-			print
-			break
+		if args.batch_size == 1 :
+			# Capture the video frame by frame
+			ret, frame = vid.read()
+			if not ret :
+				print
+				break
 
-		infer_time = 0
-		frame, infer_time = process_frame(frame, generator, model)
+			infer_time = 0
+			frame, infer_time = process_frame(frame, generator, model)
 
-		# Display the resulting frame
-		cv2.imshow('frame', frame)
+			# Display the resulting frame
+			cv2.imshow('frame', frame)
 
-		# the 'q' button is set as the
-		# quitting button you may use any
-		# desired button of your choice
-		if cv2.waitKey(1) & 0xFF == ord('q'):
-			break
+			# the 'q' button is set as the
+			# quitting button you may use any
+			# desired button of your choice
+			if cv2.waitKey(1) & 0xFF == ord('q'):
+				break
+		else :
+			frames = []
+			for _ in range(args.batch_size) :
+				ret, frame = vid.read()
+				if not ret :
+					print
+					break
+				frames.append(frame)
 
-		counter += 1
+			if len(frames) < args.batch_size : break
+
+			infer_time = process_frames(frames, generator, model)
+
+		counter += args.batch_size
 		print 'FPS: %.2f, inference: %.1f ms' % (counter/(time.time() - start), infer_time*1000), '\r',
 
 	# After the loop release the cap object 
@@ -248,3 +313,14 @@ def main(args=None):
 
 if __name__ == '__main__':
 	main()
+
+'''
+ResNet
+https://github.com/fizyr/keras-models/releases/download/v0.0.1/ResNet-50-model.keras.h5 (36M params)
+https://github.com/fizyr/keras-models/releases/download/v0.0.1/ResNet-101-model.keras.h5 (55M params)
+https://github.com/fizyr/keras-models/releases/download/v0.0.1/ResNet-152-model.keras.h5 (70M params)
+
+mobilenet
+mobilenet128_1.0 : https://github.com/fchollet/deep-learning-models/releases/download/v0.6/mobilenet_1_0_128_tf_no_top.h5 (13M params)
+
+'''
